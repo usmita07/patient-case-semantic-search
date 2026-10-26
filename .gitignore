@@ -1,0 +1,35 @@
+# Python
+
+**pycache**/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+
+venv/
+.venv/
+env/
+
+# Jupyter Notebook
+
+.ipynb_checkpoints/
+
+# Environment variables and secrets
+
+.env
+.env.*
+
+# Temporary files
+
+*.log
+.DS_Store
+Thumbs.db
+# Dataset files
+
+data/patient_cases_large.csv
+data/patient_cases_cleaned.csv
+
+# Generated evaluation outputs
+
+data/evaluation_results.csv
+data/evaluation_metrics.csv
