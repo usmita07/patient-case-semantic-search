@@ -73,7 +73,7 @@ def load_resources():
         normalize_embeddings=True
     )
 
-        return df, model, embeddings
+    return df, model, embeddings
 
 
 try:
