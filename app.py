@@ -77,6 +77,5 @@ def load_resources():
 
 except Exception as exc:
     st.error(f"Unable to load the search system: {exc}")
-except Exception as exc:
-    st.error(f"Unable to load the search system: {exc}")
+
 
