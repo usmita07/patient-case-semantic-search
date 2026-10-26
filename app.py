@@ -13,12 +13,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# Project paths
-PROJECT_PATH = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH = os.path.join(
-    PROJECT_PATH, "data", "patient_cases_cleaned.csv"
-)
-
+# Hugging Face dataset configuration
+DATASET_NAME = "aisc-team-a1/Asclepius-Synthetic-Clinical-Notes"
 st.title("🔎 Patient Case Semantic Search")
 st.write(
     "Search synthetic clinical notes using natural-language queries "
@@ -33,16 +29,45 @@ st.info(
 # Load dataset and model only once
 @st.cache_resource
 def load_resources():
-    df = pd.read_csv(DATA_PATH)
-    df = df.dropna(subset=["note"]).copy()
-    df["note"] = df["note"].astype(str).str.strip()
-    df = df[df["note"] != ""].reset_index(drop=True)
+    from datasets import load_dataset
 
-    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    # Stream a sample instead of downloading the entire dataset
+    dataset = load_dataset(
+        DATASET_NAME,
+        split="train",
+        streaming=True
+    )
+
+    records = []
+
+    for i, record in enumerate(dataset):
+        if i >= 2000:
+            break
+
+        note = record.get("note")
+
+        if note is not None and str(note).strip():
+            records.append({
+                "patient_id": record.get("patient_id", i),
+                "note": str(note).strip(),
+                "task": record.get("task", ""),
+                "question": record.get("question", "")
+            })
+
+    df = pd.DataFrame(records)
+
+    if df.empty:
+        raise ValueError("No valid clinical notes were loaded.")
+
+    df = df.drop_duplicates(subset=["note"]).reset_index(drop=True)
+
+    model = SentenceTransformer(
+        "sentence-transformers/all-MiniLM-L6-v2"
+    )
 
     embeddings = model.encode(
         df["note"].tolist(),
-        batch_size=16,
+        batch_size=4,
         show_progress_bar=False,
         convert_to_numpy=True,
         normalize_embeddings=True
@@ -50,72 +75,8 @@ def load_resources():
 
     return df, model, embeddings
 
-
-try:
-    with st.spinner("Loading clinical notes and search model..."):
-        df, model, embeddings = load_resources()
-
-    st.success(f"Search system ready: {len(df)} clinical notes loaded.")
-
-    query = st.text_area(
-        "Enter a symptom or clinical description",
-        placeholder="Example: Patient with chest pain and shortness of breath"
-    )
-
-    top_k = st.slider(
-        "Number of results",
-        min_value=1,
-        max_value=10,
-        value=5
-    )
-
-    if st.button("Search cases", type="primary"):
-        if not query.strip():
-            st.warning("Please enter a search query.")
-        else:
-            query_embedding = model.encode(
-                [query.strip()],
-                convert_to_numpy=True,
-                normalize_embeddings=True
-            )
-
-            scores = cosine_similarity(
-                query_embedding, embeddings
-            )[0]
-
-            top_indices = np.argsort(scores)[::-1][:top_k]
-
-            st.subheader("Most semantically similar cases")
-
-            for rank, idx in enumerate(top_indices, start=1):
-                row = df.iloc[idx]
-
-                with st.container(border=True):
-                    st.markdown(f"### Result {rank}")
-
-                    if "patient_id" in df.columns:
-                        st.caption(f"Record ID: {row['patient_id']}")
-
-                    st.metric(
-                        "Text similarity",
-                        f"{scores[idx]:.3f}"
-                    )
-
-                    st.write(row["note"])
-
-                    if "task" in df.columns and pd.notna(row["task"]):
-                        st.caption(f"Task: {row['task']}")
-
-                    if "question" in df.columns and pd.notna(row["question"]):
-                        with st.expander("Related question"):
-                            st.write(row["question"])
-
-except FileNotFoundError:
-    st.error(
-        "Cleaned dataset not found. Please check that "
-        "data/patient_cases_cleaned.csv exists."
-    )
-
+except Exception as exc:
+    st.error(f"Unable to load the search system: {exc}")
 except Exception as exc:
     st.error(f"Unable to load the search system: {exc}")
 
